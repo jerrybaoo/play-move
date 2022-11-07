@@ -19,9 +19,7 @@ module expansion::scenes{
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use sui::coin::{Self, Coin};
-    use sui::balance;
 
-    use expansion::priority_queue::{Self, PriorityQueue, Entry};
     use expansion::coin::{XCOIN};    
 
     const E_INSUFFICIENT_COIN: u64 = 0;
@@ -38,10 +36,11 @@ module expansion::scenes{
         attenuation_factor: u64,
     }
 
-    struct ParticipantInfo has drop, key, store {
+    struct ParticipantInfo has copy, drop, key, store {
         id : address,
         energy: u64,
         alive: bool,
+        distance: u64,
     }
 
     struct SceneParams has copy ,store{
@@ -55,7 +54,7 @@ module expansion::scenes{
         id: UID,
         energy_source: EnergySource,
 
-        participants: VecMap<address, Entry<ParticipantInfo>>,
+        participants: VecMap<address, ParticipantInfo>,
 
         parameters: SceneParams,
 
@@ -83,7 +82,7 @@ module expansion::scenes{
     }
 
     public entry fun participant_enter(
-        ctx: &mut TxContext,
+        _ctx: &mut TxContext,
         scene: &mut Scene,
         participant_address: address,
         stakes: Coin<XCOIN>,
@@ -91,14 +90,14 @@ module expansion::scenes{
         assert!(coin::value(&stakes) < scene.min_stake, E_INSUFFICIENT_COIN);
         assert!(vec_map::size(&scene.participants) < scene.parameters.max_participant, E_MAX_PARTICIPANT);
 
-        vec_map::insert(&mut scene.participants, participant_address, priority_queue::new_entry(
-            scene.energy_source.radius *2, 
+        vec_map::insert(&mut scene.participants, participant_address, 
             ParticipantInfo{
                 id: participant_address,
                 energy: 0,
                 alive: true,
+                distance: scene.energy_source.radius *2, 
             },
-        ));
+        );
 
         coin::join(&mut scene.total_stake, stakes);
     }
@@ -112,17 +111,16 @@ module expansion::scenes{
     ){
         assert!(vec_map::contains(&scene.participants, &participant_address), E_PARTICIPANT_NOT_EXIST);
 
-        let entry = vec_map::get_mut(&mut scene.participants, &participant_address);
-        let entry_distance = priority_queue::entry_priority(entry);
+        let participant = vec_map::get_mut(&mut scene.participants, &participant_address);
         
         if (forward == true) {
-            if (entry_distance <= distance){
-                priority_queue::set_entry_priority(entry, 0);
+            if (participant.distance <= distance){
+                participant.distance = 0;
             }else{
-                priority_queue::set_entry_priority(entry, entry_distance - distance)
+                participant.distance = participant.distance - distance;
             }
         }else{
-            priority_queue::set_entry_priority(entry, entry_distance + distance)
+            participant.distance = participant.distance + distance;
         }
     }
 
@@ -145,25 +143,24 @@ module expansion::scenes{
             i = i + 1;
         };
 
-        let j = 0;
+        let j = n -1;
 
-        let participant = priority_queue<ParticipantInfo>::new(all_participant);    
+        sort_participant_info(&mut all_participant);
 
-        while (j < n) {
-            let participant = priority_queue::pop(&mut participant);
-            let participant_distance = priority_queue<ParticipantInfo>::entry_priority(&participant);
+        while (j >= 0) {
+            let participant = vector::borrow_mut(&mut all_participant, j);
 
-            let received = calcualte_receive_energy(scene.energy_source.power, participant_distance);
+            let received = calcualte_receive_energy(scene.energy_source.power, participant.distance);
             consumed_energy = consumed_energy + received;
             if (consumed_energy > scene.energy_source.equilibrium) {
-                alive_min_distance = participant_distance;
-                break;
+                alive_min_distance = participant.distance;
+                break
             };
 
             participant.energy = participant.energy + received;
 
-            vec_map::insert(&mut alive_participants, key, participant);
-            j = j +1;
+            vec_map::insert(&mut alive_participants, participant.id, *participant);
+            j = j - 1;
         };
 
         // if alive_min_distance be setted. Then energy source change radius and some participant will dead.
@@ -177,7 +174,7 @@ module expansion::scenes{
     }
 
     public entry fun end_scene(ctx: &mut TxContext, scene: &mut Scene){
-        assert!(scene.frames == 0, E_NOT_END);
+        assert!(scene.parameters.frames == 0, E_NOT_END);
         let max_recevie_energy = 0;
         let winers = vector::empty();
         let n = vec_map::size(&scene.participants);
@@ -185,7 +182,7 @@ module expansion::scenes{
         while (i < n) {
             let (key, participant) = vec_map::pop(&mut scene.participants);
             if (participant.energy < max_recevie_energy){
-                continue;
+                continue
             };
 
             if (participant.energy > max_recevie_energy){
@@ -196,21 +193,52 @@ module expansion::scenes{
             i = i + 1;
         };
 
-        let n_winers = vector::size(&winers);
-        let coin_value = balance::value(&coin::into_balance(scene.total_stake));
-        let reward = coin_value / n_winers;
+        let coin_value = coin::value(&scene.total_stake);
         
         let i = 0;
-        let n = vector::size(&winers);
+        let n = vector::length(&winers);
         let reward = coin_value / n;
         while( i < n){
-            let reward_balance = balance::split(&coin::into_balance(scene.total_stake), reward);
-            transfer::transfer(coin::from_balance(reward_balance), vector::borrow(i));
+            let reward_coin = coin::split(&mut scene.total_stake, reward, ctx);
+            transfer::transfer(reward_coin, *vector::borrow(&winers, i));
             i = i + 1;
         }
     }
 
     fun calcualte_receive_energy(distance: u64, energy_intensity: u64): u64{
         energy_intensity / distance
+    }
+
+    //  quick sort. should be iterative version ?
+    fun sort_participant_info(v: &mut vector<ParticipantInfo>){
+        let length = vector::length(v);
+        quick_sort(v, 0, length)
+    } 
+
+    fun quick_sort(v: &mut vector<ParticipantInfo>, left: u64, right: u64){
+        if (left < right){
+            let partition_index = partion(v, left, right);
+            quick_sort(v, left, partition_index -1);
+            quick_sort(v, partition_index + 1, right);
+        }
+    }
+
+    fun partion(v: &mut vector<ParticipantInfo>, left: u64, right: u64) : u64{
+        let pivot: u64 = left;
+        let index: u64 = pivot + 1;
+        let i: u64 = index;
+        
+        while (i <= right) {
+            if (vector::borrow(v, i).distance < vector::borrow(v, pivot).distance){
+                vector::swap(v, i, pivot);
+                index = index + 1;
+            };
+
+            i = i + 1;
+        };
+
+        vector::swap(v, pivot, index -1);
+
+        index - 1
     }
 }
