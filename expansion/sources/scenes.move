@@ -5,22 +5,16 @@
 // The closer you are to the energy source, the more energy you get,
 // but at the same time there is a risk of being swallowed.
 
-// 1) Create a scense, including the energy source, an empty participant set.
-// 2) A centralized service advancement scenario by a certain interval
-// 3) Energy will shrink and expand depending on the energy being drawn.
-//    It has an equilibrium point and always moves towards the equilibrium point.
-// 4) Participant can move at will.
-// 5) Participant must stake some assets. The ultimate winner will receive all staking assets.
-
 module expansion::scenes{
-    use sui::object::{Self, UID};
     use std::vector::{Self};
+
+    use sui::object::{Self, UID};
     use sui::vec_map::{Self, VecMap};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use sui::coin::{Self, Coin};
 
-    use expansion::coin::{XCOIN};    
+    use expansion::coin::{XCOIN};   
 
     const E_INSUFFICIENT_COIN: u64 = 0;
     const E_MAX_PARTICIPANT: u64 = 1;
@@ -33,7 +27,6 @@ module expansion::scenes{
         power: u64,
         radius: u64,
         equilibrium: u64,
-        attenuation_factor: u64,
     }
 
     struct ParticipantInfo has copy, drop, key, store {
@@ -64,30 +57,30 @@ module expansion::scenes{
 
     public entry fun create_scence(
         ctx: &mut TxContext,
-        source: &EnergySource,
+        source: EnergySource,
         min_stake: u64,
-        parameter: &SceneParams
+        parameters: SceneParams
     ){
         transfer::transfer(
             Scene{
                 id: object::new(ctx),
-                energy_source: *source,
+                energy_source: source,
                 participants: vec_map::empty(),
                 min_stake,
                 total_stake: coin::zero(ctx),
-                parameters: *parameter,
+                parameters,
             },
             tx_context::sender(ctx)
         )
     }
 
-    public entry fun participant_enter(
+    public fun participant_enter(
         _ctx: &mut TxContext,
         scene: &mut Scene,
         participant_address: address,
         stakes: Coin<XCOIN>,
     ){
-        assert!(coin::value(&stakes) < scene.min_stake, E_INSUFFICIENT_COIN);
+        assert!(coin::value(&stakes) >= scene.min_stake, E_INSUFFICIENT_COIN);
         assert!(vec_map::size(&scene.participants) < scene.parameters.max_participant, E_MAX_PARTICIPANT);
 
         vec_map::insert(&mut scene.participants, participant_address, 
@@ -102,7 +95,13 @@ module expansion::scenes{
         coin::join(&mut scene.total_stake, stakes);
     }
 
-    public entry fun participant_move(
+    // The caller of this function needs control of the scene,
+    // Control of the scene may be in the central session service. 
+    // In fact, the user submits his mobile parameters to the centralized service 
+    // instead of sending transactions to the chain.
+    // Maybe we need to make the Scene as a shared object, but will that reduce performance?
+    // The same problem exists in `participant_enter` function.
+    public fun participant_move(
         _ctx: &mut TxContext,
         scene: &mut Scene, 
         participant_address: address,
@@ -127,7 +126,7 @@ module expansion::scenes{
     // advance scene by frame
     //  1. change energy boundary
     //  2. calculate energy of all alive participant
-    public entry fun advance_scene(ctx: &mut TxContext, scene: &mut Scene){
+    public fun advance_scene(ctx: &mut TxContext, scene: &mut Scene){
         assert!(scene.parameters.next_frame_block <= tx_context::epoch(ctx), E_NOT_NEXT_FRAME);
 
         let n = vec_map::size(&scene.participants);
@@ -147,10 +146,10 @@ module expansion::scenes{
 
         sort_participant_info(&mut all_participant);
 
+        // Filter out participants who are too close 
         while (j >= 0) {
             let participant = vector::borrow_mut(&mut all_participant, j);
-
-            let received = calcualte_receive_energy(scene.energy_source.power, participant.distance);
+            let received = calcualte_receive_energy(participant.distance, scene.energy_source.power);
             consumed_energy = consumed_energy + received;
             if (consumed_energy > scene.energy_source.equilibrium) {
                 alive_min_distance = participant.distance;
@@ -160,6 +159,10 @@ module expansion::scenes{
             participant.energy = participant.energy + received;
 
             vec_map::insert(&mut alive_participants, participant.id, *participant);
+
+            if (j == 0) {
+                break
+            };
             j = j - 1;
         };
 
@@ -173,13 +176,17 @@ module expansion::scenes{
         scene.parameters.next_frame_block = tx_context::epoch(ctx) + scene.parameters.frame_interval;
     }
 
-    public entry fun end_scene(ctx: &mut TxContext, scene: &mut Scene){
+    // end the game, distribute reward.
+    public fun end_scene(ctx: &mut TxContext, scene: &mut Scene){
         assert!(scene.parameters.frames == 0, E_NOT_END);
+        
         let max_recevie_energy = 0;
-        let winers = vector::empty();
         let n = vec_map::size(&scene.participants);
         let i = 0;
+        // There may be multiple winners who receive the same amount of energy.
+        let winers = vector::empty();
         while (i < n) {
+            i = i + 1;
             let (key, participant) = vec_map::pop(&mut scene.participants);
             if (participant.energy < max_recevie_energy){
                 continue
@@ -188,9 +195,8 @@ module expansion::scenes{
             if (participant.energy > max_recevie_energy){
                 winers = vector::empty();   
             };
-
+            max_recevie_energy = participant.energy;
             vector::push_back(&mut winers, key);
-            i = i + 1;
         };
 
         let coin_value = coin::value(&scene.total_stake);
@@ -198,6 +204,7 @@ module expansion::scenes{
         let i = 0;
         let n = vector::length(&winers);
         let reward = coin_value / n;
+
         while( i < n){
             let reward_coin = coin::split(&mut scene.total_stake, reward, ctx);
             transfer::transfer(reward_coin, *vector::borrow(&winers, i));
@@ -206,19 +213,24 @@ module expansion::scenes{
     }
 
     fun calcualte_receive_energy(distance: u64, energy_intensity: u64): u64{
+        if (distance == 0){
+            return 0
+        };
         energy_intensity / distance
     }
 
     //  quick sort. should be iterative version ?
     fun sort_participant_info(v: &mut vector<ParticipantInfo>){
-        let length = vector::length(v);
-        quick_sort(v, 0, length)
+        let right = vector::length(v) - 1;
+        quick_sort(v, 0, right)
     } 
 
     fun quick_sort(v: &mut vector<ParticipantInfo>, left: u64, right: u64){
         if (left < right){
             let partition_index = partion(v, left, right);
-            quick_sort(v, left, partition_index -1);
+            if (partition_index > 1){
+                quick_sort(v, left, partition_index -1);
+            };
             quick_sort(v, partition_index + 1, right);
         }
     }
@@ -230,7 +242,7 @@ module expansion::scenes{
         
         while (i <= right) {
             if (vector::borrow(v, i).distance < vector::borrow(v, pivot).distance){
-                vector::swap(v, i, pivot);
+                vector::swap(v, i, index);
                 index = index + 1;
             };
 
@@ -238,7 +250,271 @@ module expansion::scenes{
         };
 
         vector::swap(v, pivot, index -1);
-
         index - 1
+    }
+
+    #[test]
+    fun create_scene_test(){
+        use sui::test_scenario;
+
+        let admin = @0x1232;
+        let scenario_val = test_scenario::begin(admin);
+        let scenario = &mut scenario_val;
+
+        {
+            let source = EnergySource{
+                power: 100000,
+                radius: 2000,
+                equilibrium: 10000,
+            };
+
+            let sp = SceneParams{
+                frames: 32,
+                frame_interval: 10,
+                next_frame_block: 10,
+                max_participant: 100,
+            };
+
+            create_scence(
+                test_scenario::ctx(scenario),
+                source,
+                2000000,
+                sp,
+            );
+        };
+
+        test_scenario::next_tx(scenario, admin);
+        // check init scene
+        {
+            let scene = test_scenario::take_from_sender<Scene>(scenario);
+            assert!(scene.min_stake == 2000000, 0);
+
+            assert!(scene.energy_source.power == 100000, 1);
+            assert!(scene.energy_source.radius == 2000, 2);
+            assert!(scene.energy_source.equilibrium == 10000, 3);
+
+            assert!(scene.parameters.frames == 32, 4);
+            assert!(scene.parameters.frame_interval == 10, 5);
+            assert!(scene.parameters.next_frame_block == 10, 6);
+            assert!(scene.parameters.max_participant == 100, 7);
+
+            assert!(coin::value(&scene.total_stake) == 0, 8);
+
+            test_scenario::return_to_sender(scenario, scene);
+        };
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test_only]
+    fun create_test_scene(
+        ctx: &mut TxContext,   
+    ){
+        let source = EnergySource{
+            power: 100000,
+            radius: 2000,
+            equilibrium: 90,
+        };
+
+        let sp = SceneParams{
+            frames: 1,
+            frame_interval: 1,
+            next_frame_block: 10,
+            max_participant: 10,
+        };
+
+        create_scence(
+            ctx,
+            source,
+            2000000,
+            sp,
+        );
+    }    
+
+    #[test]
+    fun participant_enter_move_test(){
+        use sui::test_scenario;
+        use sui::vec_map::{Self};
+        use expansion::coin::{XCOIN};
+
+        let admin = @0x1231;
+        let player1 = @0x1232;
+        let player2 = @0x1233;
+
+        let scenario_val = test_scenario::begin(admin);
+        let scenario = &mut scenario_val;
+
+        create_test_scene(test_scenario::ctx(scenario));
+        test_scenario::next_tx(scenario, admin);
+
+        {
+            let coin = coin::mint_for_testing<XCOIN>(2000000, test_scenario::ctx(scenario));
+            let scene = test_scenario::take_from_sender<Scene>(scenario);
+            
+            participant_enter(
+                test_scenario::ctx(scenario),
+                &mut scene,
+                player1,
+                coin,
+            );
+
+            let coin2 = coin::mint_for_testing<XCOIN>(2000000, test_scenario::ctx(scenario));
+            participant_enter(
+                test_scenario::ctx(scenario),
+                &mut scene,
+                player2,
+                coin2,
+            );
+
+            assert!(vec_map::size(&scene.participants) == 2, 0);
+            let player1_info = vec_map::get(&scene.participants, &player1);
+            assert!(player1_info.alive == true, 1);
+            assert!(player1_info.id == @0x1232, 2);
+            assert!(player1_info.energy == 0, 3);
+            assert!(player1_info.distance == 4000, 4);
+
+            test_scenario::return_to_sender(scenario, scene);
+        };
+
+        // player move
+        test_scenario::next_tx(scenario, admin);
+        {
+            let scene = test_scenario::take_from_sender<Scene>(scenario);
+            participant_move(
+                test_scenario::ctx(scenario),
+                &mut scene,
+                player2,
+                1000,
+                false
+            );
+
+            let player2_info = vec_map::get(&scene.participants, &player2);
+            assert!(player2_info.alive == true, 5);
+            assert!(player2_info.energy == 0, 6);
+            assert!(player2_info.distance == 5000, 7);
+
+            test_scenario::return_to_sender(scenario, scene);
+        };
+
+        test_scenario::end(scenario_val);        
+    }
+
+    #[test_only]
+    fun player_enter(ctx: &mut TxContext,scene: &mut Scene, players: &vector<address>){
+        let i = 0;
+        let n = vector::length(players);
+        while (i < n){
+            let coin = coin::mint_for_testing<XCOIN>(2000000, ctx);
+            let player_address = vector::borrow(players, i);
+
+            participant_enter(
+                ctx,
+                scene,
+                *player_address,
+                coin,
+            );
+
+            i = i + 1;
+        }
+    }
+
+    #[test_only]
+    fun player_move(ctx: &mut TxContext, scene: &mut Scene, players: &vector<address>, distance: &vector<u64>, dir: &vector<bool>){
+        
+        let i = 0;
+        let n = vector::length(players);
+
+        while (i < n){
+            let player_address = vector::borrow(players, i);
+            let distance = vector::borrow(distance, i);
+            let forward  = vector::borrow(dir, i);
+
+            participant_move(
+                ctx,
+                scene,
+                *player_address,
+                *distance,
+                *forward,
+            );
+
+            i = i + 1;
+        }
+    }
+
+    #[test_only]
+    fun advance_epoch(ctx: &mut TxContext, n: u64){
+        let i = 0;
+        while(i < n ){
+            tx_context::increment_epoch_number(ctx);
+            i = i + 1;
+        };
+    }
+
+    #[test]
+    fun advance_scene_test(){
+        use sui::test_scenario;
+        use sui::vec_map::Self;
+
+        let admin = @0x1231;
+        let players = vector[ @0x1232, @0x1233, @0x1234, @0x1235, @0x1236, @0x1237];
+
+        let scenario_val = test_scenario::begin(admin);
+        let scenario = &mut scenario_val;
+
+        create_test_scene(test_scenario::ctx(scenario));
+        test_scenario::next_tx(scenario, admin);
+        {
+            let scene = test_scenario::take_from_sender<Scene>(scenario);
+            player_enter(test_scenario::ctx(scenario), &mut scene, &players);
+            test_scenario::return_to_sender(scenario, scene);
+        };
+        test_scenario::next_tx(scenario, admin);
+
+        let move_distance = vector[ 1000, 2000, 3000, 1000, 2000, 4000];
+        let forward = vector[ true, true, true, false, false, true];
+
+        {
+            let scene = test_scenario::take_from_sender<Scene>(scenario);
+            player_move(test_scenario::ctx(scenario), &mut scene, &players, &move_distance, &forward);
+            test_scenario::return_to_sender(scenario, scene);
+        };
+
+        test_scenario::next_tx(scenario, admin);
+        {
+            let scene = test_scenario::take_from_sender<Scene>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            advance_epoch(ctx, 10);
+            advance_scene(ctx, &mut scene);
+            test_scenario::return_to_sender(scenario, scene);
+        };
+        test_scenario::next_tx(scenario, admin);
+        {
+            let scene = test_scenario::take_from_sender<Scene>(scenario);
+            assert!(scene.energy_source.radius == 2000, 1);
+            assert!(vec_map::size(&scene.participants) == 3, 1);
+            assert!(vec_map::get(&scene.participants, &@0x1232).energy == 33, 2);
+            test_scenario::return_to_sender(scenario, scene);
+        };
+
+        // end game
+        test_scenario::next_tx(scenario, admin);
+        {
+            let scene = test_scenario::take_from_sender<Scene>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            end_scene(ctx, &mut scene);
+            test_scenario::return_to_sender(scenario, scene);
+        };
+
+        // check reward
+        test_scenario::next_tx(scenario, admin);
+        {
+            let winner_coin = test_scenario::take_from_address<Coin<XCOIN>>(scenario, @0x1232);
+            let winner_coin_value = coin::value(&winner_coin);
+            assert!(winner_coin_value == 12000000, 3);
+            
+            test_scenario::return_to_address(@0x1232, winner_coin);
+        };
+
+        test_scenario::end(scenario_val);  
     }
 }
