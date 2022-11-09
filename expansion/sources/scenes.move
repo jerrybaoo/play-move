@@ -14,7 +14,7 @@ module expansion::scenes{
     use sui::transfer;
     use sui::coin::{Self, Coin};
 
-    use expansion::coin::{XCOIN};   
+    use expansion::xcoin::{XCOIN};   
 
     const E_INSUFFICIENT_COIN: u64 = 0;
     const E_MAX_PARTICIPANT: u64 = 1;
@@ -29,11 +29,11 @@ module expansion::scenes{
         equilibrium: u64,
     }
 
-    struct ParticipantInfo has copy, drop, key, store {
-        id : address,
+    struct ParticipantInfo has copy, drop, store {
         energy: u64,
         alive: bool,
         distance: u64,
+        id : address,
     }
 
     struct SceneParams has copy ,store{
@@ -55,11 +55,11 @@ module expansion::scenes{
         total_stake: Coin<XCOIN>,
     }
 
-    public entry fun create_scence(
-        ctx: &mut TxContext,
+    public fun  create_scene(
         source: EnergySource,
+        parameters: SceneParams,
         min_stake: u64,
-        parameters: SceneParams
+        ctx: &mut TxContext,
     ){
         transfer::transfer(
             Scene{
@@ -74,11 +74,11 @@ module expansion::scenes{
         )
     }
 
-    public fun participant_enter(
-        _ctx: &mut TxContext,
+    public entry fun participant_enter(
         scene: &mut Scene,
-        participant_address: address,
         stakes: Coin<XCOIN>,
+        participant_address: address,
+        _ctx: &mut TxContext,
     ){
         assert!(coin::value(&stakes) >= scene.min_stake, E_INSUFFICIENT_COIN);
         assert!(vec_map::size(&scene.participants) < scene.parameters.max_participant, E_MAX_PARTICIPANT);
@@ -101,12 +101,12 @@ module expansion::scenes{
     // instead of sending transactions to the chain.
     // Maybe we need to make the Scene as a shared object, but will that reduce performance?
     // The same problem exists in `participant_enter` function.
-    public fun participant_move(
-        _ctx: &mut TxContext,
+    public entry fun participant_move(
         scene: &mut Scene, 
         participant_address: address,
         distance: u64,
-        forward: bool
+        forward: bool,
+        _ctx: &mut TxContext,
     ){
         assert!(vec_map::contains(&scene.participants, &participant_address), E_PARTICIPANT_NOT_EXIST);
 
@@ -126,7 +126,7 @@ module expansion::scenes{
     // advance scene by frame
     //  1. change energy boundary
     //  2. calculate energy of all alive participant
-    public fun advance_scene(ctx: &mut TxContext, scene: &mut Scene){
+    public entry fun advance_scene(scene: &mut Scene, ctx: &mut TxContext){
         assert!(scene.parameters.next_frame_block <= tx_context::epoch(ctx), E_NOT_NEXT_FRAME);
 
         let n = vec_map::size(&scene.participants);
@@ -177,7 +177,7 @@ module expansion::scenes{
     }
 
     // end the game, distribute reward.
-    public fun end_scene(ctx: &mut TxContext, scene: &mut Scene){
+    public entry fun end_scene(scene: &mut Scene, ctx: &mut TxContext){
         assert!(scene.parameters.frames == 0, E_NOT_END);
         
         let max_recevie_energy = 0;
@@ -275,11 +275,11 @@ module expansion::scenes{
                 max_participant: 100,
             };
 
-            create_scence(
-                test_scenario::ctx(scenario),
+            create_scene(
                 source,
-                2000000,
                 sp,
+                2000000,
+                test_scenario::ctx(scenario),
             );
         };
 
@@ -322,12 +322,12 @@ module expansion::scenes{
             next_frame_block: 10,
             max_participant: 10,
         };
-
-        create_scence(
-            ctx,
+        
+        create_scene(
             source,
-            2000000,
             sp,
+            2000000,
+            ctx,
         );
     }    
 
@@ -335,7 +335,7 @@ module expansion::scenes{
     fun participant_enter_move_test(){
         use sui::test_scenario;
         use sui::vec_map::{Self};
-        use expansion::coin::{XCOIN};
+        use expansion::xcoin::{XCOIN};
 
         let admin = @0x1231;
         let player1 = @0x1232;
@@ -352,18 +352,18 @@ module expansion::scenes{
             let scene = test_scenario::take_from_sender<Scene>(scenario);
             
             participant_enter(
-                test_scenario::ctx(scenario),
                 &mut scene,
-                player1,
                 coin,
+                player1,
+                test_scenario::ctx(scenario),
             );
 
             let coin2 = coin::mint_for_testing<XCOIN>(2000000, test_scenario::ctx(scenario));
             participant_enter(
-                test_scenario::ctx(scenario),
                 &mut scene,
-                player2,
                 coin2,
+                player2,
+                test_scenario::ctx(scenario),
             );
 
             assert!(vec_map::size(&scene.participants) == 2, 0);
@@ -381,11 +381,11 @@ module expansion::scenes{
         {
             let scene = test_scenario::take_from_sender<Scene>(scenario);
             participant_move(
-                test_scenario::ctx(scenario),
                 &mut scene,
                 player2,
                 1000,
-                false
+                false,
+                test_scenario::ctx(scenario),
             );
 
             let player2_info = vec_map::get(&scene.participants, &player2);
@@ -408,10 +408,10 @@ module expansion::scenes{
             let player_address = vector::borrow(players, i);
 
             participant_enter(
-                ctx,
                 scene,
-                *player_address,
                 coin,
+                *player_address,
+                ctx,
             );
 
             i = i + 1;
@@ -430,11 +430,11 @@ module expansion::scenes{
             let forward  = vector::borrow(dir, i);
 
             participant_move(
-                ctx,
                 scene,
                 *player_address,
                 *distance,
                 *forward,
+                ctx,
             );
 
             i = i + 1;
@@ -484,7 +484,7 @@ module expansion::scenes{
             let scene = test_scenario::take_from_sender<Scene>(scenario);
             let ctx = test_scenario::ctx(scenario);
             advance_epoch(ctx, 10);
-            advance_scene(ctx, &mut scene);
+            advance_scene(&mut scene, ctx,);
             test_scenario::return_to_sender(scenario, scene);
         };
         test_scenario::next_tx(scenario, admin);
@@ -501,7 +501,7 @@ module expansion::scenes{
         {
             let scene = test_scenario::take_from_sender<Scene>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            end_scene(ctx, &mut scene);
+            end_scene(&mut scene, ctx);
             test_scenario::return_to_sender(scenario, scene);
         };
 
