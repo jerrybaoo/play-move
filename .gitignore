@@ -1,2 +1,5 @@
 expansion/build
+
 *.log.*
+
+expansion_server/target
