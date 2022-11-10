@@ -2,4 +2,4 @@ expansion/build
 
 *.log.*
 
-expansion_server/target
+expansion_service/target
