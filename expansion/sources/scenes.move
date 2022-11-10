@@ -36,7 +36,7 @@ module expansion::scenes{
         id : address,
     }
 
-    struct SceneParams has copy ,store{
+    struct SceneParams has copy ,store, drop{
         frames: u64,
         frame_interval: u64,
         next_frame_block: u64,
@@ -55,12 +55,30 @@ module expansion::scenes{
         total_stake: Coin<XCOIN>,
     }
 
-    public fun  create_scene(
-        source: EnergySource,
-        parameters: SceneParams,
+    public fun create_scene(
+        power: u64,
+        radius: u64,
+        equilibrium: u64,
+        frames: u64,
+        frame_interval: u64,
+        next_frame_block: u64,
+        max_participant: u64,  
         min_stake: u64,
         ctx: &mut TxContext,
     ){
+        let source = EnergySource{
+            power: power,
+            radius: radius,
+            equilibrium: equilibrium,
+        };
+        
+        let parameters = SceneParams{
+            frames: frames,
+            frame_interval: frame_interval,
+            next_frame_block: next_frame_block,
+            max_participant: max_participant,
+        };
+
         transfer::transfer(
             Scene{
                 id: object::new(ctx),
@@ -276,8 +294,13 @@ module expansion::scenes{
             };
 
             create_scene(
-                source,
-                sp,
+                source.power,
+                source.radius,
+                source.equilibrium,
+                sp.frames,
+                sp.frame_interval,
+                sp.next_frame_block,
+                sp.max_participant,
                 2000000,
                 test_scenario::ctx(scenario),
             );
@@ -324,8 +347,13 @@ module expansion::scenes{
         };
         
         create_scene(
-            source,
-            sp,
+            source.power,
+            source.radius,
+            source.equilibrium,
+            sp.frames,
+            sp.frame_interval,
+            sp.next_frame_block,
+            sp.max_participant,
             2000000,
             ctx,
         );
