@@ -6,6 +6,9 @@
 mod primitives;
 mod server;
 
+#[cfg(test)]
+pub mod test;
+
 use std::path::PathBuf;
 
 use anyhow::anyhow;

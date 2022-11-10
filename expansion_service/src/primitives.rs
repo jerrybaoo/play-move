@@ -1,9 +1,10 @@
 // Copyright (c) Developer.
 // SPDX-License-Identifier: Apache-2.0
 
+use proc_macro_crate::ExactSuiJsonValue;
 use serde::Serialize;
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, ExactSuiJsonValue)]
 pub struct CreateSceneParameter {
     pub power: u64,
     pub radius: u64,

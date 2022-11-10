@@ -102,7 +102,6 @@ impl Server {
             .first()
             .ok_or(anyhow!("keystore has't addresses"))?;
 
-        
         let v3 = serde_json::to_value::<u64>(params.min_stake_amount)?;
         let arg3 = SuiJsonValue::new(v3)?;
 
@@ -142,40 +141,14 @@ impl Server {
 
 pub fn mock_scene() -> CreateSceneParameter {
     CreateSceneParameter {
-        energy_source: EnergySource {
-            power: 100000,
-            radius: 2000,
-            equilibrium: 90,
-        },
-        scene_parameter: SceneParameter {
-            frames: 1,
-            frame_interval: 1,
-            next_frame_block: 10,
-            max_participant: 10,
-        },
+        power: 100000,
+        radius: 2000,
+        equilibrium: 90,
+        frames: 1,
+        frame_interval: 1,
+        next_frame_block: 10,
+        max_participant: 10,
+
         min_stake_amount: 0,
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::primitives::{CreateSceneParameter, EnergySource, SceneParameter};
-
-    #[test]
-    fn create_scene_should_work() {
-        let params = CreateSceneParameter {
-            energy_source: EnergySource {
-                power: 100000,
-                radius: 2000,
-                equilibrium: 90,
-            },
-            scene_parameter: SceneParameter {
-                frames: 1,
-                frame_interval: 1,
-                next_frame_block: 10,
-                max_participant: 10,
-            },
-            min_stake_amount: 0,
-        };
     }
 }
