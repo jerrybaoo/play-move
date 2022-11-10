@@ -1,14 +1,16 @@
 // Copyright (c) Developer.
 // SPDX-License-Identifier: Apache-2.0
 
-// define some macro
-
 use proc_macro::TokenStream;
 use quote::quote;
 use syn;
 
 type StructFields = syn::punctuated::Punctuated<syn::Field, syn::Token!(,)>;
 
+// ExactSuiJsonValue convert struct filed to SuiJsonValue array.
+// Usually we get a contract and use the corresponding json object,
+// first deserialize it into a struct, and then convert this object into a SuiJsonValue List.
+// With this macro any object can be quickly converted to SuiJsonValue Vector.
 #[proc_macro_derive(ExactSuiJsonValue)]
 pub fn derive(input: TokenStream) -> TokenStream {
     let st = syn::parse_macro_input!(input as syn::DeriveInput);
