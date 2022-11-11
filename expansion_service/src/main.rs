@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use anyhow::anyhow;
 use clap::Parser;
 use clap::Subcommand;
+use primitives::*;
 use sui_sdk::{types::base_types::ObjectID, SuiClient};
 
 use server::*;
@@ -44,6 +45,24 @@ enum ExpansionCommand {
         #[clap(long)]
         expansion_package_id: String,
     },
+    #[clap(about = "get xcoin, which is the game chip ")]
+    MintXCoin {
+        #[clap(long)]
+        expansion_package_id: String,
+        #[clap(long)]
+        xcoin_object_id: String,
+        #[clap(long)]
+        amount: u64,
+        #[clap(long)]
+        target: String,
+    },
+    #[clap(about = "enter scene by stake some xcoin")]
+    Enter {
+        expansion_package_id: String,
+        scene_object_id: String,
+        stake_xcoin_id: String,
+        participant: String,
+    },
 }
 
 #[tokio::main]
@@ -54,13 +73,51 @@ async fn main() -> Result<(), anyhow::Error> {
 
     match opts.subcommand {
         ExpansionCommand::Publish { package_path } => {
-            server.publish_package(&package_path).await?;
+            let (publish_package_id, xcode_object_id) =
+                server.publish_package(&package_path).await?;
+
+            println!(
+                "publish package id: {}, xcoin_object_id {}",
+                publish_package_id, xcode_object_id
+            );
         }
         ExpansionCommand::Start {
             expansion_package_id,
         } => {
-            server
+            let create_scene_object_id = server
                 .create_scene(expansion_package_id, &server::mock_scene())
+                .await?;
+
+            println!("create scene object id: {}", create_scene_object_id)
+        }
+        ExpansionCommand::MintXCoin {
+            expansion_package_id,
+            xcoin_object_id,
+            amount,
+            target,
+        } => {
+            let params = CoinMintParameter {
+                object_id: xcoin_object_id,
+                amount,
+                recipient: target,
+            };
+            server.mint_xcoin(expansion_package_id, &params).await?;
+        }
+        ExpansionCommand::Enter {
+            expansion_package_id,
+            scene_object_id,
+            stake_xcoin_id,
+            participant,
+        } => {
+            server
+                .enter(
+                    expansion_package_id,
+                    &EnterParameter {
+                        scene_object_id,
+                        stake_xcoin_id,
+                        participant,
+                    },
+                )
                 .await?;
         }
     };

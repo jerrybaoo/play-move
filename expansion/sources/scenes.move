@@ -55,7 +55,7 @@ module expansion::scenes{
         total_stake: Coin<XCOIN>,
     }
 
-    public fun create_scene(
+    public entry fun create_scene(
         power: u64,
         radius: u64,
         equilibrium: u64,

@@ -16,8 +16,10 @@ sui-keys = {git = "https://github.com/MystenLabs/sui", branch = "devnet"}
 sui-framework = {git = "https://github.com/MystenLabs/sui", branch = "devnet"}
 sui-framework-build = {git = "https://github.com/MystenLabs/sui", branch = "devnet"}
 sui-json = {git = "https://github.com/MystenLabs/sui", branch = "devnet"}
+sui-json-rpc-types = {git = "https://github.com/MystenLabs/sui", branch = "devnet"}
 
 proc_macro_crate = {path = "./proc_macro_crate"}
+traits = {path = "./traits"}
 
 [patch.crates-io]
 sqlx = { git="https://github.com/huitseeker/sqlx", branch="update_libsqlite3" }

@@ -16,3 +16,5 @@ quote = {version="1.0"}
 
 serde_json = "1.0.83"
 sui-json = {git = "https://github.com/MystenLabs/sui", branch = "devnet"}
+
+traits = {path = "../traits"}

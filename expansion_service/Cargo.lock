@@ -2407,9 +2407,11 @@ dependencies = [
  "sui-framework",
  "sui-framework-build",
  "sui-json",
+ "sui-json-rpc-types",
  "sui-keys",
  "sui-sdk",
  "tokio",
+ "traits",
 ]
 
 [[package]]
@@ -6364,6 +6366,7 @@ dependencies = [
  "serde_json",
  "sui-json",
  "syn 1.0.103",
+ "traits",
 ]
 
 [[package]]
@@ -9428,6 +9431,15 @@ dependencies = [
  "lazy_static 1.4.0",
  "quote 1.0.21",
  "syn 1.0.103",
+]
+
+[[package]]
+name = "traits"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "sui-json",
 ]
 
 [[package]]

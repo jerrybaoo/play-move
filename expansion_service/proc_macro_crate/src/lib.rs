@@ -28,10 +28,10 @@ fn do_expand(st: &syn::DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let types: Vec<_> = fields.iter().map(|f| &f.ty).collect();
 
     let ret = quote! {
-        impl #struct_ident{
-            pub fn fields_to_sui_values(&self)->Result<Vec<sui_json::SuiJsonValue>, anyhow::Error>{
+        impl traits::DoExactSuiJsonValue for #struct_ident{
+            fn fields_to_sui_values(&self)->Result<Vec<sui_json::SuiJsonValue>, anyhow::Error>{
                 let mut values = Vec::new();
-                #(values.push(sui_json::SuiJsonValue::new(serde_json::to_value::<#types>(self.#idents)?)?);)*
+                #(values.push(sui_json::SuiJsonValue::new(serde_json::to_value::<#types>(self.#idents.clone())?)?);)*
                 Ok(values)
             }
         }
