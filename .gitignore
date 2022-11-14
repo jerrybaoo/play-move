@@ -1,4 +1,6 @@
 expansion/build
+component/zoo_demo/build
+
 
 *.log.*
 
