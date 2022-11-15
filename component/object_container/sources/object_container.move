@@ -1,9 +1,9 @@
 // Copyright (c) Developer.
 // SPDX-License-Identifier: Apache-2.0
 
-// The object container can store a series of objects, and the user 
-// can identify the type of the object by u64. The stored objects are 
-// indexed by incremental u64. 
+// The object container can store a series of objects.
+// The user can set and get the type of the object. 
+// The stored objects are indexed by incremental u64.
 
 module object_container::container{
     use std::vector::{Self};
@@ -12,54 +12,54 @@ module object_container::container{
     use sui::dynamic_object_field::{Self};
     use sui::transfer;
 
-    struct ObjectContainer has key{
+    struct ObjectContainer<Type: copy + store> has key{
         id: UID,
-        field_types: vector<u64>,
-        next_field_index: u64,
+        types: vector<Type>,
+        object_index: u64,
     }
 
-    public fun create(ctx: &mut TxContext){
+    public fun create<Type: copy + store>(ctx: &mut TxContext){
         transfer::transfer(
-            ObjectContainer{
+            ObjectContainer<Type>{
                 id: object::new(ctx),
-                field_types: vector::empty(),
-                next_field_index: 0,
+                types: vector::empty(),
+                object_index: 0,
             },
             tx_context::sender(ctx),
         )
     }
 
-    public fun length(oc: &ObjectContainer): u64{
-        oc.next_field_index - 1
+    public fun length<Type: copy + store>(oc: &ObjectContainer<Type>): u64{
+        oc.object_index - 1
     }
 
-    public fun get_type(oc: &ObjectContainer, index: u64): u64{
-        *vector::borrow(&oc.field_types, index)
+    public fun get_type<Type: copy + store>(oc: &ObjectContainer<Type>, index: u64): Type{
+        *vector::borrow(&oc.types, index)
     }
 
-    public fun add_object<T: key + store>(
-        object_container: &mut ObjectContainer,
+    public fun add_object<Type: copy + store, T: key + store>(
+        object_container: &mut ObjectContainer<Type>,
         object: T,
-        object_type: u64,
+        object_type: Type,
         _ctx: &mut TxContext
     ){
-        let cur_field_index = object_container.next_field_index;
-        object_container.next_field_index = object_container.next_field_index + 1;
+        let cur_field_index = object_container.object_index;
+        object_container.object_index = object_container.object_index + 1;
 
-        vector::push_back(&mut object_container.field_types, object_type);
+        vector::push_back(&mut object_container.types, object_type);
         dynamic_object_field::add(&mut object_container.id, cur_field_index, object);
     }
 
-    public fun borrow_mut<Value: key + store>(
-        oc: &mut ObjectContainer,
+    public fun borrow_mut<Type: copy + store, Value: key + store>(
+        oc: &mut ObjectContainer<Type>,
         index: u64,
         _ctx: &mut TxContext
     ):&mut Value {
         dynamic_object_field::borrow_mut<u64, Value>(&mut oc.id, index)
     }
 
-    public fun borrow<Value: key + store>(
-        oc: &ObjectContainer,
+    public fun borrow<Type: copy + store, Value: key + store>(
+        oc: &ObjectContainer<Type>,
         index: u64,
         _ctx: &mut TxContext
     ):&Value {

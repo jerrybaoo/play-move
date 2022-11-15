@@ -1,13 +1,12 @@
 // Copyright (c) Developer.
 // SPDX-License-Identifier: Apache-2.0
 
-// Define animals used in driver script. 
+// Define animals used in zoo script. 
 
 module animal::animals{
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
-
 
     struct Animal<T: store> has key, store{
         id: UID,
