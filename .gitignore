@@ -2,6 +2,7 @@ expansion/build
 # component/zoo/build
 # component/animals/build
 component/*/build
+component/*/*/build
 
 
 *.log.*
