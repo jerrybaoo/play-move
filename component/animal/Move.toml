@@ -1,0 +1,14 @@
+[package]
+name = "animal"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+
+[addresses]
+animal =  "_"
+sui =  "0000000000000000000000000000000000000002"
+
+
+[dev-addresses] 
+animal = "0x0"

@@ -1,5 +1,7 @@
 expansion/build
-component/zoo_demo/build
+# component/zoo/build
+# component/animals/build
+component/*/build
 
 
 *.log.*

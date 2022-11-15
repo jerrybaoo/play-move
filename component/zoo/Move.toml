@@ -1,10 +1,13 @@
 [package]
-name = "zoo_demo"
+name = "zoo_driver"
 version = "0.0.1"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+object_container = { local = "../object_container"}
+animal = {local = "../animal"}
 
 [addresses]
-zoo_demo =  "0x0"
+object_container = "0xbabe1"
+animal = "0xbabae2"
 sui =  "0000000000000000000000000000000000000002"

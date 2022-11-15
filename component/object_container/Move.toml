@@ -1,0 +1,13 @@
+[package]
+name = "object_container"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+
+[addresses]
+object_container =  "_"
+sui =  "0000000000000000000000000000000000000002"
+
+[dev-addresses] 
+object_container = "0x0"
