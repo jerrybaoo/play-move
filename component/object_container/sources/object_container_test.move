@@ -106,9 +106,9 @@ module object_container::container_test{
                 name: 3,
             };
             container::add_object<u64, Object0>(&mut oc, ob3, Object0Type, ts::ctx(&mut scenario));
-            
+
             // check exist
-            assert!(container::exists_<u64>(&oc, 1), 3);
+            assert!(container::exists_<u64>(&oc, 0), 3);
 
             ts::return_to_sender(&mut scenario, oc);
         };

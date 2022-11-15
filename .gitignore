@@ -7,4 +7,6 @@ component/*/*/build
 
 *.log.*
 
-expansion_service/target
+toys/*/target
+
+toys/*/build
