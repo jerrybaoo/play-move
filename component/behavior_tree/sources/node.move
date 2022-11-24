@@ -31,6 +31,7 @@ module behavior_tree::node{
     struct TreeNode has copy, store, drop{
         id: u64,
         parent_id: u64,
+        is_running: bool,
         kind: u64,
         childs: vector<u64>,
     }
@@ -45,6 +46,7 @@ module behavior_tree::node{
         let root_node = TreeNode{
             id: 0,
             parent_id: 0,
+            is_running: false,
             kind: kind,
             childs: vector::empty(),
         };
@@ -60,6 +62,7 @@ module behavior_tree::node{
         let control_node = TreeNode{
             id: next_node_id,
             parent_id: parent_id,
+            is_running: false,
             kind: control_kind,
             childs: vector::empty(),
         };
@@ -128,8 +131,17 @@ module behavior_tree::node{
         TreeNode{
             id: id,
             parent_id: 0,
+            is_running: false,
             kind: kind,
             childs: vector::empty(),
         }
-    }    
+    }
+
+    public fun enter(node: &mut TreeNode){
+        node.is_running = true;
+    }
+
+    public fun is_running(node: &TreeNode): bool{
+        node.is_running 
+    }
 }
