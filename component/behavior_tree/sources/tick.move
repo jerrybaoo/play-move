@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Because the action node is open and no one knows how it will be invoked, 
-// the behavior tree is driven in script. Because the script does not store data, 
+// the behavior tree is driven in script. The script does not store data, 
 // it can be replaced at any time.
 
 script {
